@@ -13,7 +13,6 @@ public class RewardsService : IRewardsService
     private readonly int _attractionProximityRange = 200;
     private readonly IGpsUtil _gpsUtil;
     private readonly IRewardCentral _rewardsCentral;
-    private static int count = 0;
 
     public RewardsService(IGpsUtil gpsUtil, IRewardCentral rewardCentral)
     {
@@ -32,27 +31,41 @@ public class RewardsService : IRewardsService
         _proximityBuffer = _defaultProximityBuffer;
     }
 
-    public void CalculateRewards(User user)
+    // Calcule les récompenses pour un utilisateur
+    public async Task CalculateRewards(User user) /* ici perf */
     {
-        count++;
+        // Récupère la liste des lieux visités par l’utilisateur.
         List<VisitedLocation> userLocations = user.VisitedLocations;
-        List<Attraction> attractions = _gpsUtil.GetAttractions();
+        // Le mot-clé await est utilisé pour attendre que la tâche se termine avant de continuer l’exécution
+        var attractions = await _gpsUtil.GetAttractions();
 
-        foreach (var visitedLocation in userLocations)
+        // Les boucles for imbiquées parcourent chaque lieu visité par l’utilisateur et chaque attraction
+        for (int i = 0; i < userLocations.Count; i++)
         {
-            foreach (var attraction in attractions)
+            for (int j = 0; j < attractions.Count; j++)
             {
-                if (!user.UserRewards.Any(r => r.Attraction.AttractionName == attraction.AttractionName))
+                // Cette condition vérifie si l’utilisateur est à proximité de l’attraction
+                if (NearAttraction(userLocations[i], attractions[j]) && IsNotRewarded(user, attractions[j]))
                 {
-                    if (NearAttraction(visitedLocation, attraction))
-                    {
-                        user.AddUserReward(new UserReward(visitedLocation, attraction, GetRewardPoints(attraction, user)));
-                    }
+                    // Si l’utilisateur est à proximité de l’attraction et n’a pas encore été récompensé pour cette attraction,
+                    // une nouvelle récompense est créée et ajoutée à la liste des récompenses de l’utilisateur
+                    user.AddUserReward(new UserReward(userLocations[i], attractions[j], GetRewardPoints(attractions[j], user)));
                 }
             }
         }
     }
-
+    // Méthode qui vérifie si un utilisateur a déjà été récompensé pour une attraction spécifique
+    private static bool IsNotRewarded(User user, Attraction attraction)
+    {
+        for (int k = 0; k < user.UserRewards.Count; k++)
+        {
+            if (user.UserRewards[k].Attraction.AttractionName == attraction.AttractionName)
+            {
+                return false;
+            }
+        }
+        return true;
+    }
     public bool IsWithinAttractionProximity(Attraction attraction, Locations location)
     {
         Console.WriteLine(GetDistance(attraction, location));

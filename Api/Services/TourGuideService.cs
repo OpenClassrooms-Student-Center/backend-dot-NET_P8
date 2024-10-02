@@ -1,6 +1,4 @@
 ﻿using GpsUtil.Location;
-using Microsoft.Extensions.Logging;
-using System.Diagnostics;
 using System.Globalization;
 using TourGuide.LibrairiesWrappers.Interfaces;
 using TourGuide.Services.Interfaces;
@@ -35,6 +33,16 @@ public class TourGuideService : ITourGuideService
             _logger.LogInformation("TestMode enabled");
             _logger.LogDebug("Initializing users");
             InitializeInternalUsers();
+            // Crée un nouvel utilisateur "xavier"
+            Guid userId = Guid.NewGuid(); // Génère un nouvel identifiant unique
+            string userName = "xavier";
+            string phoneNumber = "123-456-7890"; // Remplacez par le numéro de téléphone réel
+            string emailAddress = "xavier@example.com"; // Remplacez par l'adresse e-mail réelle
+
+            User xavier = new(userId, userName, phoneNumber, emailAddress);
+
+            // Ajoute "xavier" à la carte des utilisateurs internes
+            _internalUserMap.Add(xavier.UserName, xavier);
             _logger.LogDebug("Finished initializing users");
         }
 
@@ -49,14 +57,15 @@ public class TourGuideService : ITourGuideService
         return user.UserRewards;
     }
 
-    public VisitedLocation GetUserLocation(User user)
+    public async Task<VisitedLocation> GetUserLocation(User user)
     {
-        return user.VisitedLocations.Any() ? user.GetLastVisitedLocation() : TrackUserLocation(user);
+        return user.VisitedLocations.Any() ? user.GetLastVisitedLocation() : await TrackUserLocation(user);
     }
 
     public User GetUser(string userName)
     {
-        return _internalUserMap.ContainsKey(userName) ? _internalUserMap[userName] : null;
+        /*  l’implémentation de l’indexeur recherche une valeur Null en appelant la méthode IDictionary.ContainsKey deux recherches sont effectuées quand une seule est nécessaire */
+        return _internalUserMap.TryGetValue(userName, out User? value) ? value : null; 
     }
 
     public List<User> GetAllUsers()
@@ -82,26 +91,39 @@ public class TourGuideService : ITourGuideService
         return providers;
     }
 
-    public VisitedLocation TrackUserLocation(User user)
+    public async Task<VisitedLocation> TrackUserLocation(User user) /* ici perf */
     {
-        VisitedLocation visitedLocation = _gpsUtil.GetUserLocation(user.UserId);
+        VisitedLocation visitedLocation = await _gpsUtil.GetUserLocation(user.UserId);
         user.AddToVisitedLocations(visitedLocation);
-        _rewardsService.CalculateRewards(user);
+        await _rewardsService.CalculateRewards(user);
         return visitedLocation;
     }
 
-    public List<Attraction> GetNearByAttractions(VisitedLocation visitedLocation)
+    // Cette classe permet de stocker une attraction et sa distance
+    internal class AttractionDistance
     {
-        List<Attraction> nearbyAttractions = new ();
-        foreach (var attraction in _gpsUtil.GetAttractions())
+        public Attraction Attraction { get; set; }
+        public double Distance { get; set; }
+
+        public AttractionDistance(Attraction attraction, double distance)
         {
-            if (_rewardsService.IsWithinAttractionProximity(attraction, visitedLocation.Location))
-            {
-                nearbyAttractions.Add(attraction);
-            }
+            Attraction = attraction;
+            Distance = distance;
+        }
+    }
+    public async Task<List<Attraction>> GetNearByAttractions(VisitedLocation visitedLocation) /* ici perf */
+    {
+        List<Attraction> nearbyAttractions = await _gpsUtil.GetAttractions();
+        List<AttractionDistance> attractionsDistance = new();
+
+        for ( int i = 0; i < nearbyAttractions.Count; i++ )
+        {
+            attractionsDistance.Add(new AttractionDistance(
+                nearbyAttractions[i],
+                _rewardsService.GetDistance(nearbyAttractions[i], visitedLocation.Location)));
         }
 
-        return nearbyAttractions;
+        return attractionsDistance.OrderBy(a => a.Distance).Select(b => b.Attraction).Take(5).ToList();
     }
 
     private void AddShutDownHook()
@@ -115,7 +137,7 @@ public class TourGuideService : ITourGuideService
     * 
     **********************************************************************************/
 
-    private void InitializeInternalUsers()
+    private void InitializeInternalUsers() 
     {
         for (int i = 0; i < InternalTestHelper.GetInternalUserNumber(); i++)
         {
@@ -128,7 +150,7 @@ public class TourGuideService : ITourGuideService
         _logger.LogDebug($"Created {InternalTestHelper.GetInternalUserNumber()} internal test users.");
     }
 
-    private void GenerateUserLocationHistory(User user)
+    private void GenerateUserLocationHistory(User user) 
     {
         for (int i = 0; i < 3; i++)
         {
@@ -137,16 +159,16 @@ public class TourGuideService : ITourGuideService
         }
     }
 
-    private static readonly Random random = new Random();
+    private static readonly Random random = new();
 
-    private double GenerateRandomLongitude()
+    private double GenerateRandomLongitude() /* ici perf */
     {
-        return new Random().NextDouble() * (180 - (-180)) + (-180);
+        return  random.NextDouble() * (180 - (-180)) + (-180);/* enlever le "new Random().NextDouble()"*/
     }
 
-    private double GenerateRandomLatitude()
+    private double GenerateRandomLatitude() /* ici perf */
     {
-        return new Random().NextDouble() * (90 - (-90)) + (-90);
+        return random.NextDouble() * (90 - (-90)) + (-90); /* enlever le "new Random().NextDouble() * (90 - (-90)) + (-90)"; */
     }
 
     private DateTime GetRandomTime()

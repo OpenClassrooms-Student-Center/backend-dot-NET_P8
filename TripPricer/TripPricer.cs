@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TripPricer.Helpers;
+﻿using TripPricer.Helpers;
 
 namespace TripPricer;
 
@@ -11,13 +6,13 @@ public class TripPricer
 {
     public List<Provider> GetPrice(string apiKey, Guid attractionId, int adults, int children, int nightsStay, int rewardsPoints)
     {
-        List<Provider> providers = new List<Provider>();
-        HashSet<string> providersUsed = new HashSet<string>();
+        List<Provider> providers = new();
+        HashSet<string> providersUsed = new();
 
         // Sleep to simulate some latency
-        Thread.Sleep(ThreadLocalRandom.Current.Next(1, 50));
+        Thread.Sleep(ThreadLocalRandom.Current.Next(1, 1500));
 
-        for (int i = 0; i < 5; i++)
+        for (int i = 0; i < 10; i++)  /* Change this line (5)  */
         {
             int multiple = ThreadLocalRandom.Current.Next(100, 700);
             double childrenDiscount = children / 3.0;
@@ -42,7 +37,7 @@ public class TripPricer
 
     public string GetProviderName(string apiKey, int adults)
     {
-        int multiple = ThreadLocalRandom.Current.Next(1, 10);
+        int multiple = ThreadLocalRandom.Current.Next(1, 11); // Change this line (10)
 
         return multiple switch
         {

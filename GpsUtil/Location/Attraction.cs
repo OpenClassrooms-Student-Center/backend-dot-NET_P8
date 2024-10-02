@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace GpsUtil.Location;
+﻿namespace GpsUtil.Location;
 
 public class Attraction : Locations
 {
@@ -13,7 +7,7 @@ public class Attraction : Locations
     public string State { get; }
     public Guid AttractionId { get; }
 
-    public Attraction(string attractionName, string city, string state, double latitude, double longitude) : base(latitude, longitude)
+    public Attraction(string attractionName, string city, string state, double latitude, double longitude) : base(latitude, longitude) 
     {
         AttractionName = attractionName;
         City = city;

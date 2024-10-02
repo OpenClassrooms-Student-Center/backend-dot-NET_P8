@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using TourGuide.LibrairiesWrappers.Interfaces;
-using TourGuide.Services.Interfaces;
-using TourGuide.Services;
+﻿using Microsoft.Extensions.Logging;
 using TourGuide.LibrairiesWrappers;
-using Microsoft.Extensions.Logging;
+using TourGuide.LibrairiesWrappers.Interfaces;
+using TourGuide.Services;
+using TourGuide.Services.Interfaces;
 using TourGuide.Utilities;
 
 namespace TourGuideTest
@@ -24,7 +19,7 @@ namespace TourGuideTest
             Initialize();
         }
 
-        public void Initialize(int internalUserNumber = 100)
+        public void Initialize(int internalUserNumber = 99) /* + xavier */
         {
             var loggerFactory = LoggerFactory.Create(builder =>
             {
