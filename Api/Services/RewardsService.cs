@@ -1,4 +1,7 @@
-﻿using GpsUtil.Location;
+﻿using GpsUtil;
+using GpsUtil.Location;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using TourGuide.LibrairiesWrappers.Interfaces;
 using TourGuide.Services.Interfaces;
 using TourGuide.Users;
@@ -13,7 +16,6 @@ public class RewardsService : IRewardsService
     private readonly int _attractionProximityRange = 200;
     private readonly IGpsUtil _gpsUtil;
     private readonly IRewardCentral _rewardsCentral;
-    private static int count = 0;
 
     public RewardsService(IGpsUtil gpsUtil, IRewardCentral rewardCentral)
     {
@@ -32,30 +34,84 @@ public class RewardsService : IRewardsService
         _proximityBuffer = _defaultProximityBuffer;
     }
 
+
+
     public void CalculateRewards(User user)
     {
-        count++;
-        List<VisitedLocation> userLocations = user.VisitedLocations;
-        List<Attraction> attractions = _gpsUtil.GetAttractions();
+        var attractions = _gpsUtil.GetAttractions();
+        var rewardedAttractions = new ConcurrentDictionary<string, byte>();
 
-        foreach (var visitedLocation in userLocations)
+        List<UserReward> existingRewards;
+
+        lock (user.UserRewardsLock)
         {
-            foreach (var attraction in attractions)
-            {
-                if (!user.UserRewards.Any(r => r.Attraction.AttractionName == attraction.AttractionName))
+            existingRewards = user.UserRewards.ToList();
+        }
+
+        foreach (var reward in existingRewards)
+        {
+            rewardedAttractions.TryAdd(
+                reward.Attraction.AttractionName,
+                0);
+        }
+
+        var visitedLocations = user.VisitedLocations.ToList();
+
+        foreach (var visitedLocation in visitedLocations)
+        {
+            Parallel.ForEach(
+                attractions,
+                new ParallelOptions
                 {
-                    if (NearAttraction(visitedLocation, attraction))
-                    {
-                        user.AddUserReward(new UserReward(visitedLocation, attraction, GetRewardPoints(attraction, user)));
-                    }
+                    MaxDegreeOfParallelism = Environment.ProcessorCount
+                },
+                attraction =>
+                {
+                if (!NearAttraction(visitedLocation, attraction))
+                {
+                    return;
                 }
-            }
+
+                if (!rewardedAttractions.TryAdd(
+                        attraction.AttractionName,
+                        0))
+                {
+                    return;
+                }
+
+                //Stopwatch swRewardPoints = Stopwatch.StartNew();
+
+                var rewardPoints = GetRewardPoints(attraction, user);
+
+                //Console.WriteLine(
+                //    $"RewardCentral: {swRewardPoints.ElapsedMilliseconds} ms");
+
+                var reward = new UserReward(
+                    visitedLocation,
+                    attraction,
+                    rewardPoints
+                );
+
+                    lock (user.UserRewardsLock)
+                    {
+                    user.AddUserReward(reward);
+                }
+            });
         }
     }
 
+    public async Task CalculateRewardsAsync(User user)
+    {
+        await Task.Run(() =>
+        {
+            CalculateRewards(user);
+        });
+    }
+
+
     public bool IsWithinAttractionProximity(Attraction attraction, Locations location)
     {
-        Console.WriteLine(GetDistance(attraction, location));
+        //Console.WriteLine(GetDistance(attraction, location));
         return GetDistance(attraction, location) <= _attractionProximityRange;
     }
 
@@ -64,7 +120,7 @@ public class RewardsService : IRewardsService
         return GetDistance(attraction, visitedLocation.Location) <= _proximityBuffer;
     }
 
-    private int GetRewardPoints(Attraction attraction, User user)
+    public int GetRewardPoints(Attraction attraction, User user)
     {
         return _rewardsCentral.GetAttractionRewardPoints(attraction.AttractionId, user.UserId);
     }
